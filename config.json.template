@@ -1,4 +1,10 @@
 {
     "token": "<<YOUR BOT'S TOKEN GOES HERE NEVER UPLOAD THIS TO GITHUB>>",
-    "guild": "<<Discord server Guild ID>>"
+    "guild": "<<Discord server Guild ID>>",
+    "log_messages": true,
+    "log_audit_logs": true,
+    "log_to_all": true,
+    "categories_to_skip": [
+        "<<Admin Category, perhaps>>"
+    ]
 }

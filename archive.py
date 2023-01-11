@@ -1,17 +1,24 @@
 #! /usr/bin/python3
 
+import asyncio
 import datetime
 import discord
 import json
 import re
 import time
 
-client = discord.Client()
+intents = discord.Intents.all()
+client = discord.Client(intents=intents)
 
 with open("config.json", "r") as f:
     config = json.load(f)
     GUILD = int(config["guild"])
     TOKEN = config["token"]
+    LOG_MESSAGES = config["log_messages"]
+    LOG_AUDIT_LOGS = config["log_audit_logs"]
+    LOG_TO_ALL = config["log_to_all"]
+    CATEGORIES_TO_SKIP = config["categories_to_skip"]
+
 
 @client.event
 async def on_ready():
@@ -19,24 +26,27 @@ async def on_ready():
         print("done!")
         await gen_run()
     except Exception as e:
-        print('\nERROR:', e)
+        print("\nERROR:", e)
     finally:
         await client.close()
+
 
 async def gen_run():
     print("Loading guild... ", end="")
     guild = client.get_guild(GUILD)
     if guild == None:
-        raise Exception('Missing guild!')
+        raise Exception("Missing guild!")
     print("done!")
 
-    print("Begin archival of messages (see ./logs/messages):")
-    await gen_run_for_messages(guild)
-    print("Done!")
+    if LOG_MESSAGES:
+        print("Begin archival of messages (see ./logs/messages):")
+        await gen_run_for_messages(guild)
+        print("Done!")
 
-    print("Begin archival of audit_logs (see ./logs/audit_logs):")
-    await gen_run_for_audit_logs(guild)
-    print("Done!")
+    if LOG_AUDIT_LOGS:
+        print("Begin archival of audit_logs (see ./logs/audit_logs):")
+        await gen_run_for_audit_logs(guild)
+        print("Done!")
 
     print("Archival complete.")
 
@@ -44,6 +54,11 @@ async def gen_run():
 async def gen_run_for_messages(guild):
     all_logs = []
     for channel in guild.text_channels:
+        if channel.category.name in CATEGORIES_TO_SKIP:
+            print(
+                f"    Skipping channel #{channel.name} in {channel.category.name}",
+            )
+            continue
         filename = "logs/messages/{}.{}.json".format(channel.name, channel.id)
         print(
             "    Archiving channel #{} ({}) ... ".format(
@@ -78,15 +93,17 @@ async def gen_run_for_messages(guild):
 
         with open(filename, "w") as f:
             json.dump(logs, f)
+        print("done.")
+
+        if LOG_TO_ALL:
+            all_logs.extend(logs)
+
+    if LOG_TO_ALL:
+        print("    Archiving all messages in one file (__all__.json) ... ", end="")
+        all_logs.sort(key=lambda log: log["created_at"])
+        with open("logs/messages/__all__.json", "w") as f:
+            json.dump(all_logs, f)
         print("saved.")
-
-        all_logs.extend(logs)
-
-    print("    Archiving all messages in one file (__all__.json) ... ", end="")
-    all_logs.sort(key=lambda log: log["created_at"])
-    with open("logs/messages/__all__.json", "w") as f:
-        json.dump(all_logs, f)
-    print("saved.")
 
 
 async def gen_run_for_audit_logs(guild):
@@ -127,16 +144,18 @@ async def gen_run_for_audit_logs(guild):
             json.dump(logs, f)
         print("saved.")
 
-        all_logs.extend(logs)
+        if LOG_TO_ALL:
+            all_logs.extend(logs)
 
-    print(
-        "    Archiving all audit logs in one file (__all__.json) ... ",
-        end="",
-    )
-    all_logs.sort(key=lambda log: log["created_at"])
-    with open("logs/audit_logs/__all__.json", "w") as f:
-        json.dump(all_logs, f)
-    print("saved.")
+    if LOG_TO_ALL:
+        print(
+            "    Archiving all audit logs in one file (__all__.json) ... ",
+            end="",
+        )
+        all_logs.sort(key=lambda log: log["created_at"])
+        with open("logs/audit_logs/__all__.json", "w") as f:
+            json.dump(all_logs, f)
+        print("saved.")
 
 
 def user_data(user):
@@ -178,8 +197,10 @@ def embeds_data(embeds):
             "description": str(embed.description),
             "url": str(embed.url),
         }
-        for embed in embeds if embed
+        for embed in embeds
+        if embed
     ]
+
 
 async def reactions_data(reactions):
     data = []
@@ -189,10 +210,10 @@ async def reactions_data(reactions):
         datum = {
             "emoji": str(reaction.emoji),
             "count": reaction.count,
-            "reactors": [],
+            # "reactors": [],
         }
-        async for user in reaction.users():
-            datum["reactors"].append(user_data(user))
+        # async for user in reaction.users():
+        #     datum["reactors"].append(user_data(user))
         data.append(datum)
     return data
 
@@ -257,6 +278,11 @@ def assert_log_is_json_serializable(log):
 async def on_error(*args, **kwargs):
     await client.close()
 
+
+async def main():
+    await client.start(TOKEN)
+
+
 if __name__ == "__main__":
     print("Connecting to Discord bot... ", end="")
-    client.run(TOKEN)
+    asyncio.run(main())

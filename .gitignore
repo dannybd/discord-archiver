@@ -1,1 +1,4 @@
 config.json
+logs/
+!logs/messages/README.md
+!logs/audit_logs/README.md
